@@ -29,5 +29,5 @@ pio device monitor
 
 ## Repositórios do projeto
 
-- **agrinho-2026** (este): o corpo do robô.
+- **eba-2026-espcode** (este): o corpo do robô.
 - [agrinho-eba-2026-api](https://github.com/muriloorias/agrinho-eba-2026-api): a API de IA, que é a inteligência do robô.
