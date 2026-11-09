@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "author": "Anonymous maker",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    { "type": "wokwi-servo", "id": "servo1", "top": 103.6, "left": 230.4, "attrs": {} },
+    {
+      "type": "wokwi-servo",
+      "id": "servo2",
+      "top": 102.8,
+      "left": -256.4,
+      "rotate": 180,
+      "attrs": {}
+    },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic1", "top": -152.1, "left": -23.3, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic2", "top": 107.1, "left": -484.1, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic3", "top": 68.7, "left": 466.3, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic4", "top": 385.5, "left": -32.9, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "servo2:GND", "esp:GND.1", "black", [ "h76.8", "v-19.2" ] ],
+    [ "esp:5V", "servo2:V+", "red", [ "h0" ] ],
+    [ "esp:14", "servo2:PWM", "green", [ "h0" ] ],
+    [ "esp:5V", "servo1:V+", "red", [ "h0" ] ],
+    [ "esp:15", "servo1:PWM", "green", [ "v0" ] ],
+    [ "esp:GND.3", "servo1:GND", "black", [ "h52.84", "v67.2" ] ],
+    [ "esp:5V", "ultrasonic4:VCC", "red", [ "h33.79", "v278.4" ] ],
+    [ "esp:5V", "ultrasonic2:VCC", "red", [ "v96", "h-417.41" ] ],
+    [ "esp:5V", "ultrasonic3:VCC", "red", [ "h0" ] ],
+    [ "esp:5V", "ultrasonic1:VCC", "red", [ "h0" ] ],
+    [ "esp:GND.3", "ultrasonic1:GND", "black", [ "h0" ] ],
+    [ "esp:GND.3", "ultrasonic3:GND", "black", [ "h0" ] ],
+    [ "esp:GND.1", "ultrasonic2:GND", "black", [ "v96", "h-387.41" ] ],
+    [ "esp:GND.1", "ultrasonic4:GND", "black", [ "h0" ] ],
+    [ "esp:2", "ultrasonic3:TRIG", "green", [ "h0" ] ],
+    [ "esp:4", "ultrasonic3:ECHO", "green", [ "h0" ] ],
+    [ "ultrasonic2:TRIG", "esp:13", "green", [ "v0" ] ],
+    [ "esp:12", "ultrasonic2:ECHO", "green", [ "v0" ] ],
+    [ "esp:32", "ultrasonic1:TRIG", "green", [ "h0" ] ],
+    [ "esp:21", "ultrasonic1:ECHO", "green", [ "h0" ] ],
+    [ "esp:27", "ultrasonic4:TRIG", "green", [ "h0" ] ],
+    [ "esp:16", "ultrasonic4:ECHO", "green", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}

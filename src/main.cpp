@@ -1,73 +1,174 @@
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
-#include <Wire.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <ESP32Servo.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+//servos
+#define direito 15
+#define esquerdo 14
+//sensores de proximidade
+//direito
+#define trigdir 2
+#define echodir 4
+//esquerdo
+#define trigesq 13
+#define eshoesq 12
+//frente
+#define trifront 32
+#define echofront 21
+//atras
+#define trigback 27
+#define echoback 16
 
-// Definição dos pinos
-#define PIN_SDA 25
-#define PIN_SCL 33
-#define in1 4
-#define in2 5
-#define in3 18
-#define in4 19
+//wifi: configuracoes ficam em include/rede.h (copie de include/rede.exemplo.h)
+#if __has_include("rede.h")
+#include "rede.h"
+#else
+#error "Crie include/rede.h copiando include/rede.exemplo.h e preencha com a sua rede"
+#endif
 
-Adafruit_MPU6050 mpu;
+//servos de rotacao continua: 90 = parado, 0 e 180 = velocidade maxima em sentidos opostos
+//como os servos ficam espelhados no chassi, um gira ao contrario do outro para andar reto
+#define PARADO 90
+#define VELOCIDADE 90 //0 a 90
 
-void setup(void) {
-  Serial.begin(115200);
-  while (!Serial) delay(10);
+//todo movimento para sozinho depois de um tempo
+#define DURACAO_PADRAO 1000 //tempo de cada movimento quando nao e informado (ms)
+#define DURACAO_MAXIMA 5000 //nenhum movimento passa deste tempo (ms)
 
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  pinMode(in3, OUTPUT);
-  pinMode(in4, OUTPUT);
+Servo servoDireito;
+Servo servoEsquerdo;
 
-  Wire.begin(PIN_SDA, PIN_SCL);
+unsigned long ultimaTentativaWifi = 0;
+bool wifiConectado = false;
+bool emMovimento = false;
+unsigned long inicioMovimento = 0;
+unsigned long duracaoMovimento = 0;
 
-  if (!mpu.begin()) {
-    Serial.println("Falha ao encontrar o chip MPU6050 nos pinos 25 e 33");
-    while (1) { delay(10); }
+void conectarWifi() {
+  Serial.print("Conectando ao WiFi ");
+  Serial.print(WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_SENHA, WIFI_CANAL);
+
+  unsigned long inicio = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - inicio < WIFI_TIMEOUT) {
+    delay(250);
+    Serial.print(".");
   }
 
-  Serial.println("MPU6050 iniciado com sucesso!");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println(" conectado!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println(" falhou, tentando de novo mais tarde");
+  }
+  wifiConectado = WiFi.status() == WL_CONNECTED;
+  ultimaTentativaWifi = millis();
+}
 
-  // MODIFICAÇÃO 1: Aumenta a sensibilidade física do sensor para o valor máximo (2G)
-  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
-  
-  // Mantém o filtro de ruído para evitar leituras falsas causadas pela vibração dos motores
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ); 
-  delay(100);
+//reconecta sem travar o loop, para nao atrasar a parada dos movimentos
+void verificarWifi() {
+  bool conectado = WiFi.status() == WL_CONNECTED;
+  if (conectado && !wifiConectado) {
+    Serial.print("WiFi conectado, IP: ");
+    Serial.println(WiFi.localIP());
+  } else if (!conectado && wifiConectado) {
+    Serial.println("WiFi desconectado");
+  }
+  wifiConectado = conectado;
+
+  if (!conectado && millis() - ultimaTentativaWifi > WIFI_RECONEXAO) {
+    Serial.println("Tentando reconectar ao WiFi...");
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_SENHA, WIFI_CANAL);
+    ultimaTentativaWifi = millis();
+  }
+}
+
+void parar() {
+  servoDireito.write(PARADO);
+  servoEsquerdo.write(PARADO);
+  emMovimento = false;
+}
+
+//liga os servos e marca quando o movimento deve acabar (no maximo DURACAO_MAXIMA)
+void mover(int velDireito, int velEsquerdo, unsigned long duracao) {
+  if (duracao == 0) return;
+  servoDireito.write(PARADO + velDireito);
+  servoEsquerdo.write(PARADO + velEsquerdo);
+  inicioMovimento = millis();
+  duracaoMovimento = min(duracao, (unsigned long)DURACAO_MAXIMA);
+  emMovimento = true;
+}
+
+//chamada no loop: para os servos quando o tempo do movimento acaba
+void verificarMovimento() {
+  if (emMovimento && millis() - inicioMovimento >= duracaoMovimento) {
+    parar();
+    Serial.println("movimento terminou");
+  }
+}
+
+void frente(unsigned long duracao = DURACAO_PADRAO) {
+  mover(-VELOCIDADE, VELOCIDADE, duracao);
+}
+
+void atras(unsigned long duracao = DURACAO_PADRAO) {
+  mover(VELOCIDADE, -VELOCIDADE, duracao);
+}
+
+//gira no proprio eixo: as duas rodas no mesmo sentido de rotacao
+void esquerda(unsigned long duracao = DURACAO_PADRAO) {
+  mover(-VELOCIDADE, -VELOCIDADE, duracao);
+}
+
+void direita(unsigned long duracao = DURACAO_PADRAO) {
+  mover(VELOCIDADE, VELOCIDADE, duracao);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  servoDireito.setPeriodHertz(50);
+  servoEsquerdo.setPeriodHertz(50);
+  servoDireito.attach(direito, 500, 2400);
+  servoEsquerdo.attach(esquerdo, 500, 2400);
+  parar();
+
+  pinMode(trigdir, OUTPUT);
+  pinMode(echodir, INPUT);
+  pinMode(trigesq, OUTPUT);
+  pinMode(eshoesq, INPUT);
+  pinMode(trifront, OUTPUT);
+  pinMode(echofront, INPUT);
+  pinMode(trigback, OUTPUT);
+  pinMode(echoback, INPUT);
+
+  conectarWifi();
+
+  Serial.setTimeout(50);
+  Serial.println("Comandos pelo monitor serial: w = frente, s = atras, a = esquerda, d = direita, x = parar");
+  Serial.println("Tempo opcional em ms depois da letra, ex: w2000 (maximo 5000)");
 }
 
 void loop() {
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
+  verificarWifi();
+  verificarMovimento();
 
-  // Calcula os ângulos de inclinação em graus
-  float anguloX = atan2(a.acceleration.y, a.acceleration.z) * 180.0 / PI;
-  float anguloY = atan2(-a.acceleration.x, sqrt(a.acceleration.y * a.acceleration.y + a.acceleration.z * a.acceleration.z)) * 180.0 / PI;
-
-  // Exibe os valores no Monitor Serial
-  Serial.print("Inclinacao X: ");
-  Serial.print(anguloX);
-  Serial.print(" | Inclinacao Y: ");
-  Serial.println(anguloY);
-
-  // MODIFICAÇÃO 2: Nova janela baseada na média dos logs (X centralizado em -0.30 e Y em 2.80)
-  // Margem de tolerância aplicada: ± 0.50 graus
-  if (anguloX >= -0.80 && anguloX <= 0.20 && anguloY >= 2.30 && anguloY <= 3.30) {
-    Serial.println("-> TERRENO NIVELADO! Parando motores.");
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, LOW);
+  if (Serial.available()) {
+    char comando = Serial.read();
+    unsigned long duracao = DURACAO_PADRAO;
+    if (isDigit(Serial.peek())) {
+      duracao = Serial.parseInt();
+    }
+    switch (comando) {
+      case 'w': frente(duracao);   Serial.println("frente");   break;
+      case 's': atras(duracao);    Serial.println("atras");    break;
+      case 'a': esquerda(duracao); Serial.println("esquerda"); break;
+      case 'd': direita(duracao);  Serial.println("direita");  break;
+      case 'x': parar();           Serial.println("parado");   break;
+    }
   }
-  else {
-    Serial.println("-> Terreno inclinado. Ativando motores.");
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
-    digitalWrite(in3, HIGH);
-    digitalWrite(in4, LOW);
-  }
-
-  delay(500); 
 }
